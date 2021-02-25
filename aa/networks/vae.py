@@ -329,6 +329,10 @@ class VAE_s1(AbstractAutoEncoder):
         super(VAE_s1, self).__init__()
         channel_num = 3
         image_size = 32
+        self.channel_num = channel_num
+        self.image_size = image_size
+        self.kernel_num = kernel_num
+        self.z_size = z_size
         self.encoder = nn.Sequential(
             self._conv(channel_num, kernel_num // 4),
             self._conv(kernel_num // 4, kernel_num // 2),
