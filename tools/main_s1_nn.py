@@ -158,7 +158,7 @@ def reconst_images(epoch=2, batch_size=128, batch_num=3, train=True, model=None,
                 writer.add_image('Batch_{batch}_{datasource}_Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_Xi,epoch)
                 grid_X_Xi = torchvision.utils.make_grid((X-xi).data,  nrow=8, padding=2, normalize=True)
                 writer.add_image( '_Batch_{batch}_{datasource}_X-Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_X_Xi,epoch)
-                torchvision.utils.save_image(Xi.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_xi.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
+                torchvision.utils.save_image(xi.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_xi.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
                 torchvision.utils.save_image(X_xi.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_X_xi.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
                 torchvision.utils.save_image(X.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_X.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
     print('reconstruction complete!')
