@@ -436,7 +436,7 @@ class VAE_s1(AbstractAutoEncoder):
            out = self.classifier(x)
         out1 = self.classifier(xi)
         out2 = self.classifier(x-xi)
-        return out, out1, out2, encoded, xi,  mean, logvar
+        return out, out1, out2, z, xi,  mean, logvar
 
 class CVAE_s2(AbstractAutoEncoder):
     def __init__(self, d, beta, **kwargs):
