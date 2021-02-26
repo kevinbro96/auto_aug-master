@@ -192,7 +192,7 @@ def train(epoch):
         cross_entropy = lam * F.cross_entropy(out2, y[0]) + (1. - lam) * F.cross_entropy(out2, y[1])
         l2 = cross_entropy + entropy
         l3 = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        l3 /= bs * 3 * 1024
+        l3 /= bs * 3 * CNN_embed_dim
         loss = re_coef * l1 + ce_coef * l2 + kl_coef * l3
         loss.backward()
         optimizer.step()
