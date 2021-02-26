@@ -282,7 +282,6 @@ print('| Optimizer = ' + str(optim_type))
 elapsed_time = 0
 for epoch in range(start_epoch, start_epoch+epochs):
     start_time = time.time()
-    test(epoch)
     train(epoch)
     scheduler.step()
     if epoch % 10 == 9:
