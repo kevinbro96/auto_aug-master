@@ -11,7 +11,7 @@ from torch import nn
 from torch.nn import init
 from torch.nn import functional as F
 from torch.autograd import Variable
-
+import pdb
 def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=True)
 
@@ -354,8 +354,8 @@ class VAE_s1(AbstractAutoEncoder):
         self.decoder = nn.Sequential(
             self._deconv(kernel_num, kernel_num // 2),
             self._deconv(kernel_num // 2, kernel_num // 4),
-            self._deconv(kernel_num // 4, channel_num),
-            nn.Sigmoid()
+            self._deconv(kernel_num // 4, channel_num, relu=False)#,
+            #nn.Sigmoid()
         )
         self.classifier = Wide_ResNet(28, 10, 0.3, 10)
     # ==============
@@ -403,7 +403,7 @@ class VAE_s1(AbstractAutoEncoder):
             nn.ReLU(),
         )
 
-    def _deconv(self, channel_num, kernel_num):
+    def _deconv(self, channel_num, kernel_num, relu=True):
         return nn.Sequential(
             nn.ConvTranspose2d(
                 channel_num, kernel_num,
@@ -411,6 +411,12 @@ class VAE_s1(AbstractAutoEncoder):
             ),
             nn.BatchNorm2d(kernel_num),
             nn.ReLU(),
+        ) if relu else nn.Sequential(
+            nn.ConvTranspose2d(
+                channel_num, kernel_num,
+                kernel_size=4, stride=2, padding=1,
+            ),
+            nn.BatchNorm2d(kernel_num)
         )
 
     def _linear(self, in_size, out_size, relu=True):

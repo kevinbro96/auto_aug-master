@@ -35,16 +35,17 @@ parser.add_argument('--testOnly', '-t', action='store_true', help='Test mode wit
 parser.add_argument('--dim', default=8, type=int, help='CNN_embed_dim')
 parser.add_argument('--re', default=0.5, type=float, help='reconstruction weight')
 parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
+parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
 alpha = 2.0
 epochs = 300
 learning_rate = 1.e-3
 learning_rate_min = 2.e-4
-ce_coef = 1.0
 alpha = 2.0
 args = parser.parse_args()
 CNN_embed_dim = args.dim
 re_coef = args.re
 kl_coef = args.kl
+ce_coef = args.ce
 save_path=args.save_dir
 set_random_seed(args.seed)
 setup_logger(args.save_dir)
@@ -180,6 +181,8 @@ def train(epoch):
     print('\n=> Training Epoch #%d, LR=%.4f' %(epoch, cf.learning_rate(args.lr, epoch)))
     for batch_idx, (x, y) in enumerate(trainloader):
         x, y, y_b, lam, mixup_index = mixup_data(x, y, alpha=alpha)
+       # pdb.set_trace()
+        #print(x)
         x, y, y_b = x.cuda(), y.cuda().view(-1, ), y_b.cuda().view(-1, )
         x, y = Variable(x), [Variable(y),Variable(y_b)]
         bs = x.size(0)
