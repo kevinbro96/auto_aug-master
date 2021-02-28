@@ -16,7 +16,7 @@ import argparse
 import datetime
 from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
-
+import pdb
 import sys
 sys.path.append('.')
 
@@ -89,7 +89,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 # Model
 print('\n[Phase 2] : Model setup')
-model = VAE_s1(kernel_num=CNN_embed_dim, z_size=CNN_embed_dim)
+model = CVAE_s1_n(d=8, z=CNN_embed_dim)
 
 if use_cuda:
     model.cuda()
@@ -199,7 +199,7 @@ def train(epoch):
         loss = re_coef * l1 + ce_coef * l2 + kl_coef * l3
         loss.backward()
         optimizer.step()
-
+       # pdb.set_trace()
         # measure accuracy and record loss
         prec1, prec5, correct, pred = accuracy(out.data, y[0].data, topk=(1, 5))
         loss_avg.update(loss.data.item(), bs)
