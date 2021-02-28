@@ -334,9 +334,34 @@ class VAE_s1(AbstractAutoEncoder):
         self.kernel_num = kernel_num
         self.z_size = z_size
         self.encoder = nn.Sequential(
-            self._conv(channel_num, kernel_num // 4),
-            self._conv(kernel_num // 4, kernel_num // 2),
-            self._conv(kernel_num // 2, kernel_num),
+            nn.Conv2d(3, self.kernel_num // 4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(self.kernel_num // 4),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(self.kernel_num // 4, self.kernel_num //2, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(self.kernel_num // 2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(self.kernel_num // 2, self.kernel_num, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(self.kernel_num),
+            nn.ReLU(inplace=True),
+            ResBlock(self.kernel_num, self.kernel_num, bn=True),
+            nn.BatchNorm2d(self.kernel_num),
+            ResBlock(self.kernel_num, self.kernel_num, bn=True),
+        )
+
+        self.decoder = nn.Sequential(
+            ResBlock(self.kernel_num, self.kernel_num, bn=True),
+            nn.BatchNorm2d(self.kernel_num),
+            ResBlock(self.kernel_num, self.kernel_num, bn=True),
+            nn.BatchNorm2d(self.kernel_num),
+
+            nn.ConvTranspose2d(self.kernel_num, self.kernel_num // 2, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(self.kernel_num // 2),
+            nn.LeakyReLU(inplace=True),
+            nn.ConvTranspose2d(self.kernel_num // 2, self.kernel_num // 4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(self.kernel_num // 4),
+            nn.LeakyReLU(inplace=True),
+            nn.ConvTranspose2d(self.kernel_num // 4, 3, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(3)
         )
 
         # encoded feature's size and volume
@@ -351,12 +376,6 @@ class VAE_s1(AbstractAutoEncoder):
         self.project = self._linear(z_size, self.feature_volume, relu=False)
 
         # decoder
-        self.decoder = nn.Sequential(
-            self._deconv(kernel_num, kernel_num // 2),
-            self._deconv(kernel_num // 2, kernel_num // 4),
-            self._deconv(kernel_num // 4, channel_num, relu=False)#,
-            #nn.Sigmoid()
-        )
         self.classifier = Wide_ResNet(28, 10, 0.3, 10)
     # ==============
     # VAE components
