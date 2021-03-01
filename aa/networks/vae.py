@@ -383,8 +383,8 @@ class CVAE_s1_n(AbstractAutoEncoder):
     def forward(self, x):
         _, mu, logvar = self.encode(x)
         hi = self.reparameterize(mu, logvar)
-        hi = self.fc21(hi)
-        xi = self.decode(hi)
+        hi_projected = self.fc21(hi)
+        xi = self.decode(hi_projected)
         xi = self.xi_bn(xi)
 
         with torch.no_grad():
