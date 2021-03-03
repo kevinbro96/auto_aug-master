@@ -105,6 +105,44 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs *
 
 criterion = nn.CrossEntropyLoss()
 
+if args.testOnly:
+    model.load_state_dict(torch.load("results/emb32_5.0_0.5/model_new.pth"))
+    model.eval()
+    test_loss = 0
+    # all_l, all_s, all_y, all_z, all_mu, all_logvar = [], [], [], [], [], []
+    loss_avg = AverageMeter()
+    share_mag = AverageMeter()
+    top1 = AverageMeter()
+    top1_x_xi = AverageMeter()
+    top1_xi = AverageMeter()
+    TC = AverageMeter()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(testloader):
+            # distribute data to device
+            x, y = x.cuda(), y.cuda().view(-1, )
+            bs = x.size(0)
+
+            out, out_i, out_x_xi, hi, xi, mu, logvar = model(x)
+            loss = F.mse_loss(xi/ torch.abs(x).norm(), x/ torch.abs(x).norm())
+            test_loss += loss.item()  # sum up batch loss
+            loss_avg.update(loss.data.item(), bs)
+            # measure accuracy and record loss
+            prec1, _, _, _ = accuracy(out.data, y.data, topk=(1, 5))
+            top1.update(prec1.item(), bs)
+
+            prec1_x_xi, _, _, _ = accuracy(out_x_xi.data, y.data, topk=(1, 5))
+            top1_x_xi.update(prec1_x_xi.item(), bs)
+
+            prec1_xi, _, _, _ = accuracy(out_i.data, y.data, topk=(1, 5))
+            top1_xi.update(prec1_xi.item(), bs)
+
+            tc = total_correlation(hi, mu, logvar) / bs / CNN_embed_dim
+            TC.update(tc.item(), bs)
+        print("\n| Validation \t\tLoss: %.4f TC: %.4f" % (loss_avg.avg, TC.avg))
+        print("| X: %.2f%% X-Xi: %.2f%% Xi: %.2f%%" %(top1.avg, top1_x_xi.avg, top1_xi.avg))
+    sys.exit(0)
+
 def reconst_images(epoch=2, batch_size=128, batch_num=3, train=True, model=None, save_path='./imgs'):
     transform = transforms.Compose([transforms.ToTensor(),
                                     # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
