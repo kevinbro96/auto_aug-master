@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from tqdm import tqdm
-
+from copy import deepcopy
 import torchvision
 import torchvision.transforms as transforms
 
@@ -122,9 +122,10 @@ if args.testOnly:
             # distribute data to device
             x, y = x.cuda(), y.cuda().view(-1, )
             bs = x.size(0)
-
             out, out_i, out_x_xi, hi, xi, mu, logvar = model(x)
-            loss = F.mse_loss(xi/ torch.abs(x).norm(), x/ torch.abs(x).norm())
+            loss = 1-F.mse_loss(torch.div(xi,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
+                              torch.div(x,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
+                              reduction = 'sum')/100
             test_loss += loss.item()  # sum up batch loss
             loss_avg.update(loss.data.item(), bs)
             # measure accuracy and record loss
@@ -288,9 +289,11 @@ def test(epoch):
             # distribute data to device
             x, y = x.cuda(), y.cuda().view(-1, )
             bs = x.size(0)
-
+            norm = torch.norm(torch.abs(x.view(100,-1)),p=2,dim=1)
             out, out_i, out_x_xi, hi, xi, mu, logvar = model(x)
-            loss = F.mse_loss(xi, x)
+            loss = 1-F.mse_loss(torch.div(xi,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
+                              torch.div(x,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
+                              reduction = 'sum')/100
             test_loss += loss.item()  # sum up batch loss
             loss_avg.update(loss.data.item(), bs)
             # measure accuracy and record loss
