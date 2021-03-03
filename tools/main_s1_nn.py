@@ -9,7 +9,7 @@ from tqdm import tqdm
 from copy import deepcopy
 import torchvision
 import torchvision.transforms as transforms
-
+import wandb
 import os
 import time
 import argparse
@@ -68,7 +68,7 @@ ce_coef = args.ce
 save_path=args.save_dir
 set_random_seed(args.seed)
 setup_logger(args.save_dir)
-writer = SummaryWriter(args.save_dir)
+wandb.init(config=args)
 
 # Hyper Parameter settings
 use_cuda = torch.cuda.is_available()
@@ -212,11 +212,14 @@ def reconst_images(epoch=2, batch_size=128, batch_num=3, train=True, model=None,
                 _,_,_,_, xi,_, _ = model(X)
 
                 grid_X = torchvision.utils.make_grid(X.data,  nrow=8, padding=2, normalize=True)
-                writer.add_image( '_Batch_{batch}_{datasource}_X.jpg'.format(batch=batch_idx,datasource=datasource),grid_X,epoch)
+                wandb.log({"_Batch_{batch}_{datasource}_X.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_X)]})
+                #writer.add_image( '_Batch_{batch}_{datasource}_X.jpg'.format(batch=batch_idx,datasource=datasource),grid_X,epoch)
                 grid_Xi = torchvision.utils.make_grid(xi.data,  nrow=8, padding=2, normalize=True)
-                writer.add_image('Batch_{batch}_{datasource}_Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_Xi,epoch)
+                #writer.add_image('Batch_{batch}_{datasource}_Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_Xi,epoch)
+                wandb.log({"_Batch_{batch}_{datasource}_X.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_Xi)]})
                 grid_X_Xi = torchvision.utils.make_grid((X-xi).data,  nrow=8, padding=2, normalize=True)
-                writer.add_image( '_Batch_{batch}_{datasource}_X-Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_X_Xi,epoch)
+                #writer.add_image( '_Batch_{batch}_{datasource}_X-Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_X_Xi,epoch)
+                wandb.log({"_Batch_{batch}_{datasource}_X-Xi.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_X_Xi)]})
                 torchvision.utils.save_image(xi.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_xi.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
                 torchvision.utils.save_image((X-xi).data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_X_xi.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
                 torchvision.utils.save_image(X.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_X.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
@@ -268,12 +271,12 @@ def train(epoch):
         top1.update(prec1.item(), bs)
 
         n_iter = epoch * len(trainloader) + batch_idx
-        writer.add_scalar('loss', loss_avg.avg, n_iter)
-        writer.add_scalar('loss_rec', loss_rec.avg, n_iter)
-        writer.add_scalar('loss_ce', loss_ce.avg, n_iter)
-        writer.add_scalar('loss_entropy', loss_entropy.avg, n_iter)
-        writer.add_scalar('loss_kl', loss_kl.avg, n_iter)
-        writer.add_scalar('acc', top1.avg, n_iter)
+        wandb.log({'loss':loss_avg.avg,\
+                   'loss_rec': loss_rec.avg,\
+                   'loss_ce': loss_ce.avg,\
+                   'loss_entropy': loss_entropy.avg,\
+                   'loss_kl': loss_kl.avg,\
+                   'acc': top1.avg},step=n_iter )
         if (batch_idx + 1) % 30 == 0:
             sys.stdout.write('\r')
             sys.stdout.write('| Epoch [%3d/%3d] Iter[%3d/%3d]\t\tLoss: %.4f Loss_rec: %.4f Loss_ce: %.4f Loss_entropy: %.4f Loss_kl: %.4f Acc@1: %.3f%%'
@@ -328,11 +331,11 @@ def test(epoch):
             tc = total_correlation(hi, mu, logvar)/  bs / CNN_embed_dim
             TC.update(tc.item(), bs)
 
-        writer.add_scalar('/test/loss', loss_avg.avg, epoch)
-        writer.add_scalar('/test/X-acc', top1.avg, epoch)
-        writer.add_scalar('/test/X-Xi-acc', top1_x_xi.avg,epoch)
-        writer.add_scalar('/test/Xi-acc', top1_xi.avg,epoch)
-        writer.add_scalar('/test/TC', TC.avg,epoch)
+        wandb.log({'/test/loss': loss_avg.avg,\
+                   '/test/X-acc': top1.avg,\
+                   '/test/X-Xi-acc': top1_x_xi.avg,\
+                   '/test/Xi-acc': top1_xi.avg, \
+                   '/test/TC': TC.avg},step=epoch )
             # plot progress
         print("\n| Validation Epoch #%d\t\tLoss: %.4f TC: %.4f" % (epoch,loss_avg.avg, TC.avg))
         print("| X: %.2f%% X-Xi: %.2f%% Xi: %.2f%%" %(top1.avg, top1_x_xi.avg, top1_xi.avg))
