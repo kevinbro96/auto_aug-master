@@ -216,7 +216,7 @@ def reconst_images(epoch=2, batch_size=128, batch_num=3, train=True, model=None,
                 #writer.add_image( '_Batch_{batch}_{datasource}_X.jpg'.format(batch=batch_idx,datasource=datasource),grid_X,epoch)
                 grid_Xi = torchvision.utils.make_grid(xi.data,  nrow=8, padding=2, normalize=True)
                 #writer.add_image('Batch_{batch}_{datasource}_Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_Xi,epoch)
-                wandb.log({"_Batch_{batch}_{datasource}_X.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_Xi)]})
+                wandb.log({"_Batch_{batch}_{datasource}_Xi.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_Xi)]})
                 grid_X_Xi = torchvision.utils.make_grid((X-xi).data,  nrow=8, padding=2, normalize=True)
                 #writer.add_image( '_Batch_{batch}_{datasource}_X-Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_X_Xi,epoch)
                 wandb.log({"_Batch_{batch}_{datasource}_X-Xi.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_X_Xi)]})
