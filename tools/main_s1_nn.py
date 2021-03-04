@@ -25,24 +25,24 @@ import aa.config as cf
 from utils.set import *
 from utils.randaugment4fixmatch import RandAugmentMC
 
-cuda_device = '0'
-
-def check_mem(cuda_device):
-    devices_info = os.popen('"/usr/bin/nvidia-smi" --query-gpu=memory.total,memory.used --format=csv,nounits,noheader').read().strip().split("\n")
-    total, used = devices_info[int(cuda_device)].split(',')
-    return total,used
-
-def occumpy_mem(cuda_device):
-    total, used = check_mem(cuda_device)
-    total = int(total)
-    used = int(used)
-    max_mem = int(total * 0.9)
-    block_mem = max_mem - used
-    x = torch.cuda.FloatTensor(256,1024,block_mem)
-    del x
-
-os.environ["CUDA_VISIBLE_DEVICES"] = cuda_device
-occumpy_mem(cuda_device)
+# cuda_device = '0'
+#
+# def check_mem(cuda_device):
+#     devices_info = os.popen('"/usr/bin/nvidia-smi" --query-gpu=memory.total,memory.used --format=csv,nounits,noheader').read().strip().split("\n")
+#     total, used = devices_info[int(cuda_device)].split(',')
+#     return total,used
+#
+# def occumpy_mem(cuda_device):
+#     total, used = check_mem(cuda_device)
+#     total = int(total)
+#     used = int(used)
+#     max_mem = int(total * 0.9)
+#     block_mem = max_mem - used
+#     x = torch.cuda.FloatTensor(256,1024,block_mem)
+#     del x
+#
+# os.environ["CUDA_VISIBLE_DEVICES"] = cuda_device
+# occumpy_mem(cuda_device)
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR-10 Training')
 parser.add_argument('--lr', default=0.1, type=float, help='learning_rate')
@@ -163,13 +163,14 @@ if args.testOnly:
         print("| X: %.2f%% X-Xi: %.2f%% Xi: %.2f%%" %(top1.avg, top1_x_xi.avg, top1_xi.avg))
     sys.exit(0)
 
-def reconst_images(epoch=2, batch_size=128, batch_num=3, train=True, model=None, save_path='./imgs'):
+def reconst_images(epoch=2, batch_size=128, batch_num=2, train=True, model=None, save_path='./imgs'):
     transform = transforms.Compose([transforms.ToTensor(),
                                     # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
                                     # transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
                                     transforms.Normalize(cf.mean[args.dataset], cf.std[args.dataset])])
 
     # cifar10 dataset (images and labels)
+    set_random_seed(args.seed)
     if train:
         if args.dataset =='cifar10':
             cifar10_dataset = torchvision.datasets.CIFAR10(root='../data', train=True, download=False,
@@ -212,14 +213,14 @@ def reconst_images(epoch=2, batch_size=128, batch_num=3, train=True, model=None,
                 _,_,_,_, xi,_, _ = model(X)
 
                 grid_X = torchvision.utils.make_grid(X.data,  nrow=8, padding=2, normalize=True)
-                wandb.log({"_Batch_{batch}_{datasource}_X.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_X)]})
+                wandb.log({"_Batch_{batch}_{datasource}_X.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_X)]},commit=False)
                 #writer.add_image( '_Batch_{batch}_{datasource}_X.jpg'.format(batch=batch_idx,datasource=datasource),grid_X,epoch)
                 grid_Xi = torchvision.utils.make_grid(xi.data,  nrow=8, padding=2, normalize=True)
                 #writer.add_image('Batch_{batch}_{datasource}_Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_Xi,epoch)
-                wandb.log({"_Batch_{batch}_{datasource}_Xi.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_Xi)]})
+                wandb.log({"_Batch_{batch}_{datasource}_Xi.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_Xi)]},commit=False)
                 grid_X_Xi = torchvision.utils.make_grid((X-xi).data,  nrow=8, padding=2, normalize=True)
                 #writer.add_image( '_Batch_{batch}_{datasource}_X-Xi.jpg'.format( batch=batch_idx,datasource=datasource),grid_X_Xi,epoch)
-                wandb.log({"_Batch_{batch}_{datasource}_X-Xi.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_X_Xi)]})
+                wandb.log({"_Batch_{batch}_{datasource}_X-Xi.jpg".format(batch=batch_idx,datasource=datasource): [wandb.Image(grid_X_Xi)]},commit=False)
                 torchvision.utils.save_image(xi.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_xi.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
                 torchvision.utils.save_image((X-xi).data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_X_xi.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
                 torchvision.utils.save_image(X.data, os.path.join(save_path, 'Epoch_{epoch}_Batch_{batch}_{datasource}_X.jpg'.format(epoch = epoch, batch = batch_idx, datasource = datasource)), nrow=8, padding=2, normalize=True)
@@ -270,7 +271,7 @@ def train(epoch):
         loss_kl.update(l3.data.item(), bs)
         top1.update(prec1.item(), bs)
 
-        n_iter = epoch * len(trainloader) + batch_idx
+        n_iter = (epoch-1) * len(trainloader) + batch_idx
         wandb.log({'loss':loss_avg.avg,\
                    'loss_rec': loss_rec.avg,\
                    'loss_ce': loss_ce.avg,\
@@ -331,11 +332,11 @@ def test(epoch):
             tc = total_correlation(hi, mu, logvar)/  bs / CNN_embed_dim
             TC.update(tc.item(), bs)
 
-        wandb.log({'/test/loss': loss_avg.avg,\
-                   '/test/X-acc': top1.avg,\
-                   '/test/X-Xi-acc': top1_x_xi.avg,\
-                   '/test/Xi-acc': top1_xi.avg, \
-                   '/test/TC': TC.avg},step=epoch )
+        wandb.log({'test-loss': loss_avg.avg,\
+                   'test-X-acc': top1.avg,\
+                   'test-X-Xi-acc': top1_x_xi.avg,\
+                   'test-Xi-acc': top1_xi.avg, \
+                   'test-TC': TC.avg},commit=False )
             # plot progress
         print("\n| Validation Epoch #%d\t\tLoss: %.4f TC: %.4f" % (epoch,loss_avg.avg, TC.avg))
         print("| X: %.2f%% X-Xi: %.2f%% Xi: %.2f%%" %(top1.avg, top1_x_xi.avg, top1_xi.avg))
