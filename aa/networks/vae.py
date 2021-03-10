@@ -534,7 +534,7 @@ class VAE_s1(AbstractAutoEncoder):
         return out, out1, out2, z, xi,  mean, logvar
 
 class CVAE_s2(AbstractAutoEncoder):
-    def __init__(self, d, beta, **kwargs):
+    def __init__(self, d, z, **kwargs):
         super(CVAE_s2, self).__init__()
 
         self.encoder = nn.Sequential(
@@ -560,21 +560,17 @@ class CVAE_s2(AbstractAutoEncoder):
             nn.LeakyReLU(inplace=True),
             nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
         )
-
         self.xi_bn = nn.BatchNorm2d(3)
 
         self.f = 8
         self.d = d
-        self.fc11 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.fc12 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.beta = beta
-
-
+        self.z = z
+        self.fc11 = nn.Linear(d * self.f ** 2, self.z)
+        self.fc12 = nn.Linear(d * self.f ** 2, self.z)
+        self.fc21 = nn.Linear(self.z, d * self.f ** 2)
     def encode(self, x):
-
         h = self.encoder(x)
         h1 = h.view(-1, self.d * self.f ** 2)
-
         return h, self.fc11(h1), self.fc12(h1)
 
     def reparameterize(self, mu, logvar):
@@ -590,32 +586,23 @@ class CVAE_s2(AbstractAutoEncoder):
         h3 = self.decoder(z)
         return torch.tanh(h3)
 
-
-    def forward(self, x):
-        _, mu, logvar = self.encode(x)
-
-        z = self.reparameterize(mu, logvar)
-        xi = self.decode(z)
-        xi = self.xi_bn(xi)
-        xs = x - xi
-
-        eps = z.new(z.size()).normal_()
-        z = z + eps * self.beta
-        #std = logvar.mul(0.5).exp_()
-        #eps = std.new(std.size()).normal_()
-        #z = eps.mul(std).mul(i).add_(z)
-        #z = torch.randn(mu.size(), requires_grad=False).cuda()
-        xn = self.decode(z)
-        xn = self.xi_bn(xn)
-        x = xs + xn
-
-        return x, xs
-
-    def sample(self, size):
-        sample = torch.randn(size, self.d * self.f ** 2, requires_grad=False)
-        if self.cuda():
-            sample = sample.cuda()
-        return self.decode(sample).cpu()
+    def forward(self, x, mode):
+        if mode == "x-xi":
+            _, mu, logvar = self.encode(x)
+            hi = self.reparameterize(mu, logvar)
+            hi_projected = self.fc21(hi)
+            xi = self.decode(hi_projected)
+            xi = self.xi_bn(xi)
+            return xi
+        elif mode == "x-hi":
+            _, mu, logvar = self.encode(x)
+            hi = self.reparameterize(mu, logvar)
+            return hi
+        elif mode == "hi-xi":
+            hi_projected = self.fc21(x)
+            xi = self.decode(hi_projected)
+            xi = self.xi_bn(xi)
+            return xi
 
 class CVAE_s2_e(AbstractAutoEncoder):
     def __init__(self, d, beta, **kwargs):
