@@ -73,9 +73,9 @@ def reconst_images(epoch=2, batch_size=128, batch_num=2, train=True, model=None,
 def test(epoch, model, testloader):
     # set model as testing mode
     model.eval()
-    test_loss = 0
     # all_l, all_s, all_y, all_z, all_mu, all_logvar = [], [], [], [], [], []
-    loss_avg = AverageMeter()
+    acc_avg = AverageMeter()
+    sparse_avg = AverageMeter()
     share_mag = AverageMeter()
     top1 = AverageMeter()
     top1_x_xi = AverageMeter()
@@ -89,11 +89,16 @@ def test(epoch, model, testloader):
             bs = x.size(0)
             norm = torch.norm(torch.abs(x.view(100,-1)),p=2,dim=1)
             out, out_i, out_x_xi, hi, xi, mu, logvar = model(x)
-            loss = 1-F.mse_loss(torch.div(xi,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
+            acc_xi = 1-F.mse_loss(torch.div(xi,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
                               torch.div(x,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
                               reduction = 'sum')/100
-            test_loss += loss.item()  # sum up batch loss
-            loss_avg.update(loss.data.item(), bs)
+            acc_xd = 1-F.mse_loss(torch.div(x-xi,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
+                              torch.div(x,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
+                              reduction = 'sum')/100
+            
+            acc_avg.update(acc_xi.data.item(), bs)
+            # measure accuracy and record loss
+            sparse_avg.update(acc_xd.data.item(), bs)
             # measure accuracy and record loss
             prec1, _,_,_ = accuracy(out.data, y.data, topk=(1, 5))
             top1.update(prec1.item(), bs)
@@ -107,13 +112,14 @@ def test(epoch, model, testloader):
             tc = total_correlation(hi, mu, logvar)/  bs / args.dim
             TC.update(tc.item(), bs)
 
-        wandb.log({'test-loss': loss_avg.avg,\
+        wandb.log({'acc_avg': acc_avg.avg,\
+                   'sparse_avg': sparse_avg.avg,\
                    'test-X-acc': top1.avg,\
                    'test-X-Xi-acc': top1_x_xi.avg,\
                    'test-Xi-acc': top1_xi.avg, \
                    'test-TC': TC.avg},commit=False )
             # plot progress
-        print("\n| Validation Epoch #%d\t\tLoss: %.4f TC: %.4f" % (epoch,loss_avg.avg, TC.avg))
+        print("\n| Validation Epoch #%d\t\tAcc: %.4f TC: %.4f" % (epoch, acc_avg.avg, TC.avg))
         print("| X: %.2f%% X-Xi: %.2f%% Xi: %.2f%%" %(top1.avg, top1_x_xi.avg, top1_xi.avg))
 
 def train(args, epoch, model, optimizer, trainloader):
