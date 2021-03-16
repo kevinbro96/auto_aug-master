@@ -129,13 +129,13 @@ class RCVAE_s1(AbstractAutoEncoder):
         return torch.tanh(h3)
 
     def forward(self, x):
-        _, mu, logvar = self.encode(x)
+        h, mu, logvar = self.encode(x)
 
         hi = self.reparameterize(mu, logvar)
         xi = self.decode(hi)
         xi = self.xi_bn(xi)
 
-        return xi, mu, logvar
+        return h, xi, mu, logvar
 
 class CVAE_s1_n(AbstractAutoEncoder):
     def __init__(self, d, z,  **kwargs):
@@ -268,4 +268,4 @@ class RCVAE_nonorm(AbstractAutoEncoder):
         hi_projected = self.fc21(hi)
         xi = self.decode(hi_projected)
 
-        return xi, mu, logvar
+        return hi, xi, mu, logvar
