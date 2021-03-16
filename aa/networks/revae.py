@@ -135,11 +135,11 @@ class RCVAE_s1(AbstractAutoEncoder):
         xi = self.decode(hi)
         xi = self.xi_bn(xi)
 
-        return h, xi, mu, logvar
+        return hi, xi, mu, logvar
 
-class CVAE_s1_n(AbstractAutoEncoder):
+class RCVAE_s1_n(AbstractAutoEncoder):
     def __init__(self, d, z,  **kwargs):
-        super(CVAE_s1_n, self).__init__()
+        super(RCVAE_s1_n, self).__init__()
 
         self.encoder = nn.Sequential(
             nn.Conv2d(3, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
@@ -173,7 +173,6 @@ class CVAE_s1_n(AbstractAutoEncoder):
         self.fc11 = nn.Linear(d * self.f ** 2, self.z)
         self.fc12 = nn.Linear(d * self.f ** 2, self.z)
         self.fc21 = nn.Linear(self.z, d * self.f ** 2)
-        self.classifier = Wide_ResNet(28, 10, 0.3, 10)
 
     def encode(self, x):
         h = self.encoder(x)
@@ -200,11 +199,7 @@ class CVAE_s1_n(AbstractAutoEncoder):
         xi = self.decode(hi_projected)
         xi = self.xi_bn(xi)
 
-        with torch.no_grad():
-           out = self.classifier(x)
-        out1 = self.classifier(xi)
-        out2 = self.classifier(x-xi)
-        return out, out1, out2, hi, xi, mu, logvar
+        return hi, xi, mu, logvar
 
 class RCVAE_nonorm(AbstractAutoEncoder):
     def __init__(self, d, z,  **kwargs):

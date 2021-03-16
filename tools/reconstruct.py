@@ -26,8 +26,7 @@ from utils.set import *
 from utils.randaugment4fixmatch import RandAugmentMC
 
 
-def reconst_images(epoch=2, batch_size=128, batch_num=2, dataloader=None, model=None):
-
+def reconst_images(epoch=2, batch_size=64, batch_num=2, dataloader=None, model=None):
     cifar10_dataloader = dataloader
 
     use_cuda = torch.cuda.is_available()  # check if GPU exists
@@ -41,15 +40,15 @@ def reconst_images(epoch=2, batch_size=128, batch_num=2, dataloader=None, model=
             else:
                 X, y = X.cuda(), y.cuda().view(-1, )
                 bs = X.size(0)
-                 _, xi, _, _ = model(X)
+                _, xi, _, _ = model(X)
 
-                grid_X = torchvision.utils.make_grid(X.data, nrow=8, padding=2, normalize=True)
+                grid_X = torchvision.utils.make_grid(X[:batch_size].data, nrow=8, padding=2, normalize=True)
                 wandb.log({"_Batch_{batch}_X.jpg".format(batch=batch_idx): [
                     wandb.Image(grid_X)]}, commit=False)
-                grid_Xi = torchvision.utils.make_grid(xi.data, nrow=8, padding=2, normalize=True)
+                grid_Xi = torchvision.utils.make_grid(xi[:batch_size].data, nrow=8, padding=2, normalize=True)
                 wandb.log({"_Batch_{batch}_Xi.jpg".format(batch=batch_idx): [
                     wandb.Image(grid_Xi)]}, commit=False)
-                grid_X_Xi = torchvision.utils.make_grid((X - xi).data, nrow=8, padding=2, normalize=True)
+                grid_X_Xi = torchvision.utils.make_grid((X[:batch_size] - xi[:batch_size]).data, nrow=8, padding=2, normalize=True)
                 wandb.log({"_Batch_{batch}_X-Xi.jpg".format(batch=batch_idx): [
                     wandb.Image(grid_X_Xi)]}, commit=False)
     print('reconstruction complete!')
@@ -73,6 +72,7 @@ def test(epoch, model, testloader):
             x, y = x.cuda(), y.cuda().view(-1, )
             bs = x.size(0)
             norm = torch.norm(torch.abs(x.view(100, -1)), p=2, dim=1)
+
             hi, xi, mu, logvar = model(x)
             acc_xi = 1 - F.mse_loss(torch.div(xi, norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
                                     torch.div(x, norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
@@ -85,7 +85,7 @@ def test(epoch, model, testloader):
 
             sparse_avg.update(acc_xd.data.item(), bs)
 
-            tc = total_correlation(hi, mu, logvar) / bs / args.dim
+            tc = total_correlation(hi, mu, logvar) / bs / hi.size(1)
             TC.update(tc.item(), bs)
 
         wandb.log({'acc_avg': acc_avg.avg, \
@@ -117,9 +117,9 @@ def train(args, epoch, model, optimizer, trainloader):
 
         _, xi, mu, logvar = model(x)
 
-        l1 = F.mse_loss(xi, x)
+        l1 = F.l1_loss(xi, x)
         l3 = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        l3 /= bs * 3 * args.dim
+        l3 /= bs * 3 * mu.size(1)
         loss = args.re * l1  + args.kl * l3
         loss.backward()
         optimizer.step()
@@ -137,7 +137,7 @@ def train(args, epoch, model, optimizer, trainloader):
         if (batch_idx + 1) % 30 == 0:
             sys.stdout.write('\r')
             sys.stdout.write(
-                '| Epoch [%3d/%3d] Iter[%3d/%3d]\t\tLoss: %.4f Loss_rec: %.4f Loss_kl: %.4f %%'
+                '| Epoch [%3d/%3d] Iter[%3d/%3d]\t\tLoss: %.4f Loss_rec: %.4f Loss_kl: %.4f '
                 % (epoch, args.epochs, batch_idx + 1,
                    len(trainloader), loss_avg.avg, loss_rec.avg,  loss_kl.avg,))
 
@@ -159,18 +159,32 @@ def main(args):
     best_acc = 0
     start_epoch, batch_size, optim_type = cf.start_epoch, cf.batch_size, cf.optim_type
     print('\n[Phase 1] : Data Preparation')
-    transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        RandAugmentMC(n=2, m=10),
-        transforms.ToTensor(),
-        # transforms.Normalize(cf.mean[args.dataset], cf.std[args.dataset]),
-    ])  # meanstd transformation
+    if args.model == "nonorm":
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            RandAugmentMC(n=2, m=10),
+            transforms.ToTensor(),
+            # transforms.Normalize(cf.mean[args.dataset], cf.std[args.dataset]),
+        ])  # meanstd transformation
 
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        # transforms.Normalize(cf.mean[args.dataset], cf.std[args.dataset]),
-    ])
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            # transforms.Normalize(cf.mean[args.dataset], cf.std[args.dataset]),
+        ])
+    else:
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            RandAugmentMC(n=2, m=10),
+            transforms.ToTensor(),
+            transforms.Normalize(cf.mean[args.dataset], cf.std[args.dataset]),
+        ])  # meanstd transformation
+
+        transform_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(cf.mean[args.dataset], cf.std[args.dataset]),
+        ])
     if (args.dataset == 'cifar10'):
         print("| Preparing CIFAR-10 dataset...")
         sys.stdout.write("| ")
@@ -193,6 +207,8 @@ def main(args):
         model = RCVAE_nonorm(d=8, z=CNN_embed_dim)
     elif args.model == "og":
         model = RCVAE_s1(d=CNN_embed_dim)
+    elif args.model == "new":
+        model = RCVAE_s1_n(d=8, z=CNN_embed_dim)
 
     if use_cuda:
         model.cuda()
@@ -203,9 +219,9 @@ def main(args):
         {'params': model.parameters()}
     ], lr=learning_rate, betas=(0.9, 0.999), weight_decay=1.e-6)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * np.ceil(50000 / batch_size),
-                                                           eta_min=learning_rate_min)
-
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * np.ceil(50000 / batch_size),
+    #                                                       eta_min=learning_rate_min)
+    torch.optim.lr_scheduler.MultiStepLR(optimizer, [80,160,240], gamma=0.1, last_epoch=-1)
 
     if args.testOnly:
         model.load_state_dict(torch.load("results/emb32_5.0_0.5/model_new.pth"))
@@ -276,6 +292,6 @@ if __name__ == '__main__':
     parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
     parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
     args = parser.parse_args()
-    wandb.init(config=args)
+    wandb.init(config=args, name=args.save_dir.replace("results/", ''))
     set_random_seed(args.seed)
     main(args)
