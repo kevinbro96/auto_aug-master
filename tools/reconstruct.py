@@ -221,7 +221,7 @@ def main(args):
 
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * np.ceil(50000 / batch_size),
     #                                                       eta_min=learning_rate_min)
-    torch.optim.lr_scheduler.MultiStepLR(optimizer, [80,160,240], gamma=0.1, last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [80,160,240], gamma=0.1, last_epoch=-1)
 
     if args.testOnly:
         model.load_state_dict(torch.load("results/emb32_5.0_0.5/model_new.pth"))
