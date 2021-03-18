@@ -18,7 +18,7 @@ from torch.autograd import Variable
 import pdb
 import sys
 sys.path.append('.')
-
+import math
 from aa.networks import *
 import aa.config as cf
 from utils.set import *
@@ -145,13 +145,14 @@ def train(args, epoch, model, optimizer, trainloader):
 
         out, out1, out2, _, xi, mu, logvar = model(x)
 
-        l1 = F.mse_loss(xi, x)
+        l1 = F.l1_loss(xi, x)
         entropy = (F.softmax(out1, dim=1) * F.log_softmax(out1, dim=1)).sum(dim=1).mean()
         cross_entropy = lam * F.cross_entropy(out2, y[0]) + (1. - lam) * F.cross_entropy(out2, y[1])
         l2 = cross_entropy + entropy
         l3 = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         l3 /= bs * 3 * args.dim
-        loss = args.re * l1 + args.ce * l2 + args.kl * l3
+        re = args.re*torch.cos(math.pi*epoch/600) + 5
+        loss = re * l1 + args.ce * l2 + args.kl * l3
         loss.backward()
         optimizer.step()
 
@@ -169,7 +170,8 @@ def train(args, epoch, model, optimizer, trainloader):
                    'loss_ce': loss_ce.avg,\
                    'loss_entropy': loss_entropy.avg,\
                    'loss_kl': loss_kl.avg,\
-                   'acc': top1.avg},step=n_iter )
+                   'acc': top1.avg,\
+                   're_weight':re},step=n_iter )
         if (batch_idx + 1) % 30 == 0:
             sys.stdout.write('\r')
             sys.stdout.write('| Epoch [%3d/%3d] Iter[%3d/%3d]\t\tLoss: %.4f Loss_rec: %.4f Loss_ce: %.4f Loss_entropy: %.4f Loss_kl: %.4f Acc@1: %.3f%%'

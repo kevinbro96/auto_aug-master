@@ -117,7 +117,7 @@ def train(args, epoch, model, optimizer, trainloader):
 
         _, xi, mu, logvar = model(x)
 
-        l1 = F.l1_loss(xi, x)
+        l1 = F.mse_loss(xi, x)
         l3 = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         l3 /= bs * 3 * mu.size(1)
         loss = args.re * l1  + args.kl * l3
