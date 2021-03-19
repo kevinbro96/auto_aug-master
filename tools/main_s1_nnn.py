@@ -151,7 +151,14 @@ def train(args, epoch, model, optimizer, trainloader):
         l2 = cross_entropy + entropy
         l3 = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         l3 /= bs * 3 * args.dim
-        re = args.re*torch.cos(math.pi*epoch/600) + 5
+        #re = args.re*torch.cos(torch.tensor(math.pi)*epoch/600) + 5
+        if epoch < 100:
+            re = 50
+        elif epoch < 200:
+            re = 25
+        else:
+            re = 5
+
         loss = re * l1 + args.ce * l2 + args.kl * l3
         loss.backward()
         optimizer.step()
@@ -320,5 +327,5 @@ if __name__ == '__main__':
     parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
     parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
     args = parser.parse_args()
-    wandb.init(config = args)
+    wandb.init(config = args, name=args.save_dir.replace("results/", ''))
     main(args)
