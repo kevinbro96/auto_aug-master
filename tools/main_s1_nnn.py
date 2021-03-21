@@ -179,6 +179,7 @@ def main(args):
     learning_rate = 1.e-3
     learning_rate_min = 2.e-4
     CNN_embed_dim = args.dim
+    feature_dim = args.fdim
     setup_logger(args.save_dir)
     use_cuda = torch.cuda.is_available()
     best_acc = 0
@@ -214,7 +215,7 @@ def main(args):
 
     # Model
     print('\n[Phase 2] : Model setup')
-    model = CVAE_s1_n(d=8, z=CNN_embed_dim)
+    model = CVAE_s1_n(d=feature_dim, z=CNN_embed_dim)
 
     if use_cuda:
         model.cuda()
@@ -302,6 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', default=2.0, type=float, help='mix up')
     parser.add_argument('--epochs', default=300, type=int, help='training_epochs')
     parser.add_argument('--dim', default=8, type=int, help='CNN_embed_dim')
+    parser.add_argument('--fdim', default=8, type=int, help='feature_dim')
     parser.add_argument('--re', nargs='+', type=int)
     parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
     parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
