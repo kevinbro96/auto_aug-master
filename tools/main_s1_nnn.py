@@ -303,7 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', default=2.0, type=float, help='mix up')
     parser.add_argument('--epochs', default=300, type=int, help='training_epochs')
     parser.add_argument('--dim', default=8, type=int, help='CNN_embed_dim')
-    parser.add_argument('--fdim', default=8, type=int, help='feature_dim')
+    parser.add_argument('--fdim', default=8, type=int, help='featdim')
     parser.add_argument('--re', nargs='+', type=int)
     parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
     parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
