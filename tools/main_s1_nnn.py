@@ -226,9 +226,10 @@ def main(args):
         {'params': model.parameters()}
     ], lr=learning_rate, betas=(0.9, 0.999), weight_decay=1.e-6)
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * np.ceil(50000 / batch_size),
-                                                           eta_min=learning_rate_min)
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * np.ceil(50000 / batch_size),
+    #                                                     eta_min=learning_rate_min)
 
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.step, gamma=0.1, last_epoch=-1)
     criterion = nn.CrossEntropyLoss()
 
     if args.testOnly:
@@ -305,6 +306,7 @@ if __name__ == '__main__':
     parser.add_argument('--dim', default=8, type=int, help='CNN_embed_dim')
     parser.add_argument('--fdim', default=8, type=int, help='featdim')
     parser.add_argument('--re', nargs='+', type=int)
+    parser.add_argument('--step', nargs='+', type=int)
     parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
     parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
     args = parser.parse_args()
