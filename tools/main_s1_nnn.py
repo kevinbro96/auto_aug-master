@@ -226,10 +226,11 @@ def main(args):
         {'params': model.parameters()}
     ], lr=learning_rate, betas=(0.9, 0.999), weight_decay=1.e-6)
 
-    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * np.ceil(50000 / batch_size),
-    #                                                     eta_min=learning_rate_min)
-
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.step, gamma=0.1, last_epoch=-1)
+    if args.optim == 'consine':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50,
+                                                        eta_min=learning_rate_min)
+    else:
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=args.step, gamma=0.1, last_epoch=-1)
     criterion = nn.CrossEntropyLoss()
 
     if args.testOnly:
@@ -299,6 +300,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir', default='./results/autoaug_new_8_0.5/', type=str, help='save_dir')
     parser.add_argument('--seed', default=666, type=int, help='seed')
     parser.add_argument('--dataset', default='cifar10', type=str, help='dataset = [cifar10/cifar100]')
+    parser.add_argument('--optim', default='consine', type=str, help='optimizer')
     parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
     parser.add_argument('--testOnly', '-t', action='store_true', help='Test mode with the saved model')
     parser.add_argument('--alpha', default=2.0, type=float, help='mix up')
