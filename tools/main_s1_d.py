@@ -318,7 +318,7 @@ if __name__ == '__main__':
     parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
     parser.add_argument('--norm', default=1.0, type=float, help='norm')
     args = parser.parse_args()
-    name = 'sp{}ce{}kl{}re{}norm{}'.format(args.sp, args.ce, args.kl, args.re, args.norm)
+    name = 'sp-{}-ce{}-kl{}-re-{}-norm-{}'.format(args.sp, args.ce, args.kl, args.re, args.norm)
     wandb.init(config=args, name=name)
     set_random_seed(args.seed)
     main(args)
