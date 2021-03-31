@@ -208,7 +208,7 @@ def main(args):
     elif args.model == "og":
         model = RCVAE_s1(d=CNN_embed_dim)
     elif args.model == "new":
-        model = RCVAE_s1_n(d=8, z=CNN_embed_dim)
+        model = RCVAE_s1_n(d=32, z=CNN_embed_dim)
 
     if use_cuda:
         model.cuda()
