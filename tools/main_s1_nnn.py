@@ -131,7 +131,7 @@ def train(args, epoch, model, optimizer, trainloader):
         bs = x.size(0)
         optimizer.zero_grad()
 
-        out, out1, out2, _, xd, mu, logvar = model(x)
+        out, out1, out2, _, xi, mu, logvar = model(x)
 
         if epoch < 100:
             re = args.re[0]

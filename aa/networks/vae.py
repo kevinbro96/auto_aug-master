@@ -389,8 +389,8 @@ class CVAE_s1_n(AbstractAutoEncoder):
 
         with torch.no_grad():
            out = self.classifier(x)
-        out1 = self.classifier(xi)
-        out2 = self.classifier(x-xi)
+        out1 = self.classifier(xi.detach())
+        out2 = self.classifier((x-xi).detach())
         return out, out1, out2, hi, xi, mu, logvar
 
 class CVAE_nonorm(AbstractAutoEncoder):
