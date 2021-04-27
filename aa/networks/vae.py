@@ -11,6 +11,8 @@ from torch import nn
 from torch.nn import init
 from torch.nn import functional as F
 from torch.autograd import Variable
+from .resnet import resnet50
+from .nearest_embed import NearestEmbed
 import pdb
 def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=True)
@@ -137,196 +139,9 @@ class AbstractAutoEncoder(nn.Module):
         """returns the latest losses in a dictionary. Useful for logging."""
         return
 
-class CVAE_s1_e(AbstractAutoEncoder):
-    def __init__(self, d,  **kwargs):
-        super(CVAE_s1_e, self).__init__()
-
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(d // 2, d, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d),
-            nn.ReLU(inplace=True),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-        )
-
-        self.decoder = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-        )
-
-        self.decoder2 = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-        )
-
-        self.xi_bn = nn.BatchNorm2d(3)
-        self.xd_bn = nn.BatchNorm2d(3)
-        self.x_bn = nn.BatchNorm2d(3)
-        self.f = 8
-        self.d = d
-        self.fc11 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.fc12 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.fc21 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-
-        self.classifier = wrn(input_shape=(1, 3, 32, 32), num_classes=10, depth=28,
-            widen_factor=10, repeat=3, dropRate=0.3, bias=True)
-
-    def encode(self, x):
-        h = self.encoder(x)
-        h1 = h.view(-1, self.d * self.f ** 2)
-        return h, self.fc11(h1), self.fc12(h1), self.fc21(h1)
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = std.new(std.size()).normal_()
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
-
-    def decode(self, z):
-        z = z.view(-1, self.d, self.f, self.f)
-        h3 = self.decoder(z)
-        return torch.tanh(h3)
-
-    def decode2(self, z):
-        z = z.view(-1, self.d, self.f, self.f)
-        h3 = self.decoder2(z)
-        return torch.tanh(h3)
-
-    def forward(self, x):
-        _, mu, logvar, mu2 = self.encode(x)
-
-        hi = self.reparameterize(mu, logvar)
-        xi = self.decode(hi)
-        xi = self.xi_bn(xi)
-
-        hd = mu2
-        xd = self.decode(hd)
-        xd = self.xd_bn(xd)
-
-        x = self.decode(hi+hd)
-        x = self.x_bn(x)
-
-        return hi, xi, xd, x, mu, logvar
-
-    def loss_function(self, x, xi, xd, mu, logver, ce_coef, kl_coef, ls_coef):
-        l1 = F.mse_loss(xi + xd, x)
-        entropy = (F.softmax(net(xi), dim=1) * F.log_softmax(net(xi), dim=1)).sum(dim=1).mean()
-        cross_entropy = lam * F.cross_entropy(net(x - xi), y[0]) + (1. - lam) * F.cross_entropy(net(x - xi), y[1])
-
-
-class CVAE_s1(AbstractAutoEncoder):
-    def __init__(self, d,  **kwargs):
-        super(CVAE_s1, self).__init__()
-
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(d // 2, d, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d),
-            nn.ReLU(inplace=True),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-        )
-
-        self.decoder = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-        )
-
-        self.decoder2 = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-        )
-
-        self.xi_bn = nn.BatchNorm2d(3)
-        self.xd_bn = nn.BatchNorm2d(3)
-
-        self.f = 8
-        self.d = d
-        self.fc11 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.fc12 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.fc21 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.classifier = Wide_ResNet(28, 10, 0.3, 10)
-
-    def encode(self, x):
-        h = self.encoder(x)
-        h1 = h.view(-1, self.d * self.f ** 2)
-        return h, self.fc11(h1), self.fc12(h1), self.fc21(h1)
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = std.new(std.size()).normal_()
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
-
-    def decode(self, z):
-        z = z.view(-1, self.d, self.f, self.f)
-        h3 = self.decoder(z)
-        return torch.tanh(h3)
-
-    def decode2(self, z):
-        z = z.view(-1, self.d, self.f, self.f)
-        h3 = self.decoder2(z)
-        return torch.tanh(h3)
-
-    def forward(self, x):
-        _, mu, logvar, mu2 = self.encode(x)
-
-        hi = self.reparameterize(mu, logvar)
-        xi = self.decode(hi)
-        xi = self.xi_bn(xi)
-
-        hd = mu2
-        xd = self.decode2(hd)
-        xd = self.xd_bn(xd)
-
-        with torch.no_grad():
-           out = self.classifier(x)
-        out1 = self.classifier(xi)
-        out2 = self.classifier(x-xi)
-        return out, out1, out2, hi, xi, xd, mu, logvar
-
-class CVAE_s1_n(AbstractAutoEncoder):
+class CVAE_cifar(AbstractAutoEncoder):
     def __init__(self, d, z,  **kwargs):
-        super(CVAE_s1_n, self).__init__()
+        super(CVAE_cifar, self).__init__()
 
         self.encoder = nn.Sequential(
             nn.Conv2d(3, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
@@ -393,367 +208,87 @@ class CVAE_s1_n(AbstractAutoEncoder):
         out2 = self.classifier(x-xi)
         return out, out1, out2, hi, xi, mu, logvar
 
-class CVAE_nonorm(AbstractAutoEncoder):
-    def __init__(self, d, z,  **kwargs):
-        super(CVAE_nonorm, self).__init__()
+class CVAE_imagenet(nn.Module):
+    def __init__(self, d, k=10, num_channels=3, **kwargs):
+        super(CVAE_imagenet, self).__init__()
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(3, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(d // 2, d, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.Conv2d(num_channels, d, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(d),
-            nn.ReLU(inplace=True),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-        )
-
-        self.decoder = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
             nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.Sigmoid()
+            nn.Conv2d(d, d, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(d),
+            nn.LeakyReLU(inplace=True),
+            ResBlock(d, d),
+            nn.BatchNorm2d(d),
+            ResBlock(d, d),
+            nn.BatchNorm2d(d),
         )
-
-        self.xi_bn = nn.BatchNorm2d(3)
-
-        self.f = 8
+        self.decoder = nn.Sequential(
+            ResBlock(d, d),
+            nn.BatchNorm2d(d),
+            ResBlock(d, d),
+            nn.ConvTranspose2d(d, d, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(d),
+            nn.LeakyReLU(inplace=True),
+            nn.ConvTranspose2d(d, num_channels, kernel_size=4, stride=2, padding=1),
+        )
         self.d = d
-        self.z = z
-        self.fc11 = nn.Linear(d * self.f ** 2, self.z)
-        self.fc12 = nn.Linear(d * self.f ** 2, self.z)
-        self.fc21 = nn.Linear(self.z, d * self.f ** 2)
-        self.classifier = Wide_ResNet(28, 10, 0.3, 10)
+        self.emb = NearestEmbed(k, d)
+
+        for l in self.modules():
+            if isinstance(l, nn.Linear) or isinstance(l, nn.Conv2d):
+                l.weight.detach().normal_(0, 0.02)
+                torch.fmod(l.weight, 0.04)
+                nn.init.constant_(l.bias, 0)
+
+        self.encoder[-1].weight.detach().fill_(1 / 40)
+
+        self.emb.weight.detach().normal_(0, 0.02)
+        torch.fmod(self.emb.weight, 0.04)
+
+        self.classifier = resnet50(pretrained=True)
+
+        self.L_bn = nn.BatchNorm2d(num_channels)
+
 
     def encode(self, x):
-        h = self.encoder(x)
-        h1 = h.view(-1, self.d * self.f ** 2)
-        return h, self.fc11(h1), self.fc12(h1)
+        return self.encoder(x)
 
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = std.new(std.size()).normal_()
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
-
-    def decode(self, z):
-        z = z.view(-1, self.d, self.f, self.f)
-        h3 = self.decoder(z)
-        return h3
+    def decode(self, x):
+        return torch.tanh(self.decoder(x))
 
     def forward(self, x):
-        _, mu, logvar = self.encode(x)
-        hi = self.reparameterize(mu, logvar)
-        hi_projected = self.fc21(hi)
-        xi = self.decode(hi_projected)
+
+        z_e = self.encode(x)
+
+        z_q, _ = self.emb(z_e, weight_sg=True)
+        emb, _ = self.emb(z_e.detach())
+
+        l = self.decode(z_q)
+        xi = self.L_bn(l)
 
         with torch.no_grad():
-           out = self.classifier(x)
+            out = self.classifier(x)
         out1 = self.classifier(xi)
         out2 = self.classifier(x-xi)
-        return out, out1, out2, hi, xi, mu, logvar
+
+        return  out, out1, out2, xi, z_e, emb
 
 
-class VAE_s1(AbstractAutoEncoder):
-    def __init__(self, kernel_num,  z_size):
-        super(VAE_s1, self).__init__()
-        channel_num = 3
-        image_size = 32
-        self.channel_num = channel_num
-        self.image_size = image_size
-        self.kernel_num = kernel_num
-        self.z_size = z_size
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, self.kernel_num // 4, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(self.kernel_num // 4),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(self.kernel_num // 4, self.kernel_num //2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(self.kernel_num // 2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(self.kernel_num // 2, self.kernel_num, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(self.kernel_num),
-            nn.ReLU(inplace=True),
-            ResBlock(self.kernel_num, self.kernel_num, bn=True),
-            nn.BatchNorm2d(self.kernel_num),
-            ResBlock(self.kernel_num, self.kernel_num, bn=True),
-        )
+    def loss_function(self, x, recon_x, y, out, out1, z_e, emb, argmin, lam):
+        # self.mse = F.mse_loss(recon_x, x)
+        self.mse = F.l1_loss(recon_x, x)
+        self.vq_loss = torch.mean(torch.norm((emb - z_e.detach())**2, 2, 1))
+        self.commit_loss = torch.mean(torch.norm((emb.detach() - z_e)**2, 2, 1))
 
-        self.decoder = nn.Sequential(
-            ResBlock(self.kernel_num, self.kernel_num, bn=True),
-            nn.BatchNorm2d(self.kernel_num),
-            ResBlock(self.kernel_num, self.kernel_num, bn=True),
-            nn.BatchNorm2d(self.kernel_num),
-
-            nn.ConvTranspose2d(self.kernel_num, self.kernel_num // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(self.kernel_num // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(self.kernel_num // 2, self.kernel_num // 4, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(self.kernel_num // 4),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(self.kernel_num // 4, 3, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(3)
-        )
-
-        # encoded feature's size and volume
-        self.feature_size = image_size // 8
-        self.feature_volume = kernel_num * (self.feature_size ** 2)
-
-        # q
-        self.q_mean = self._linear(self.feature_volume, z_size, relu=False)
-        self.q_logvar = self._linear(self.feature_volume, z_size, relu=False)
-
-        # projection
-        self.project = self._linear(z_size, self.feature_volume, relu=False)
-
-        # decoder
-        self.classifier = Wide_ResNet(28, 10, 0.3, 10)
-    # ==============
-    # VAE components
-    # ==============
-
-    def q(self, encoded):
-        unrolled = encoded.view(-1, self.feature_volume)
-        return self.q_mean(unrolled), self.q_logvar(unrolled)
-
-    def z(self, mean, logvar):
-        std = logvar.mul(0.5).exp_()
-        eps = (
-            Variable(torch.randn(std.size())).cuda() if self._is_on_cuda else
-            Variable(torch.randn(std.size()))
-        )
-        return eps.mul(std).add_(mean)
-
-    def sample(self, size):
-        z = Variable(
-            torch.randn(size, self.z_size).cuda() if self._is_on_cuda() else
-            torch.randn(size, self.z_size)
-        )
-        z_projected = self.project(z).view(
-            -1, self.kernel_num,
-            self.feature_size,
-            self.feature_size,
-        )
-        return self.decoder(z_projected).data
-
-    def _is_on_cuda(self):
-        return next(self.parameters()).is_cuda
-
-    # ======
-    # Layers
-    # ======
-
-    def _conv(self, channel_size, kernel_num):
-        return nn.Sequential(
-            nn.Conv2d(
-                channel_size, kernel_num,
-                kernel_size=4, stride=2, padding=1,
-            ),
-            nn.BatchNorm2d(kernel_num),
-            nn.ReLU(),
-        )
-
-    def _deconv(self, channel_num, kernel_num, relu=True):
-        return nn.Sequential(
-            nn.ConvTranspose2d(
-                channel_num, kernel_num,
-                kernel_size=4, stride=2, padding=1,
-            ),
-            nn.BatchNorm2d(kernel_num),
-            nn.ReLU(),
-        ) if relu else nn.Sequential(
-            nn.ConvTranspose2d(
-                channel_num, kernel_num,
-                kernel_size=4, stride=2, padding=1,
-            ),
-            nn.BatchNorm2d(kernel_num)
-        )
-
-    def _linear(self, in_size, out_size, relu=True):
-        return nn.Sequential(
-            nn.Linear(in_size, out_size),
-            nn.ReLU(),
-        ) if relu else nn.Linear(in_size, out_size)
-
-    def forward(self, x):
-        #pdb.set_trace()
-        # encode x
-        encoded = self.encoder(x)
-        # sample latent code z from q given x.
-        mean, logvar = self.q(encoded)
-        z = self.z(mean, logvar)
-        z_projected = self.project(z).view(
-            -1, self.kernel_num,
-            self.feature_size,
-            self.feature_size,
-        )
-        # reconstruct x from z
-        xi = self.decoder(z_projected)
-        with torch.no_grad():
-           out = self.classifier(x)
-        out1 = self.classifier(xi)
-        out2 = self.classifier(x-xi)
-        return out, out1, out2, z, xi,  mean, logvar
-
-class CVAE_s2(AbstractAutoEncoder):
-    def __init__(self, d, z, **kwargs):
-        super(CVAE_s2, self).__init__()
-
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(d // 2, d, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d),
-            nn.ReLU(inplace=True),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-        )
-
-        self.decoder = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-        )
-        self.xi_bn = nn.BatchNorm2d(3)
-
-        self.f = 8
-        self.d = d
-        self.z = z
-        self.fc11 = nn.Linear(d * self.f ** 2, self.z)
-        self.fc12 = nn.Linear(d * self.f ** 2, self.z)
-        self.fc21 = nn.Linear(self.z, d * self.f ** 2)
-    def encode(self, x):
-        h = self.encoder(x)
-        h1 = h.view(-1, self.d * self.f ** 2)
-        return h, self.fc11(h1), self.fc12(h1)
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = std.new(std.size()).normal_()
-            return eps.mul(std).add_(mu)
+        loss = []
+        if self.celeba:
+            for i in range(40):
+                # print(out[i].shape, y[0][i].shape)
+                loss.append(lam * F.cross_entropy(out[i], y[0][i]) + (1. - lam) * F.cross_entropy(out[i], y[1][i]) + 2. * (F.softmax(out1[i], dim=1) * F.log_softmax(out1[i], dim=1)).sum(dim=1).mean())
+            self.ce_loss = sum(loss)
         else:
-            return mu
+            self.ce_loss = lam * F.cross_entropy(out, y[0]) + (1. - lam) * F.cross_entropy(out, y[1]) + 2. * (F.softmax(out1, dim=1) * F.log_softmax(out1, dim=1)).sum(dim=1).mean()
 
-    def decode(self, z):
-        z = z.view(-1, self.d, self.f, self.f)
-        h3 = self.decoder(z)
-        return torch.tanh(h3)
-
-    def forward(self, x, mode):
-        if mode == "x-xi":
-            _, mu, logvar = self.encode(x)
-            hi = self.reparameterize(mu, logvar)
-            hi_projected = self.fc21(hi)
-            xi = self.decode(hi_projected)
-            xi = self.xi_bn(xi)
-            return xi
-        elif mode == "x-hi":
-            _, mu, logvar = self.encode(x)
-            hi = self.reparameterize(mu, logvar)
-            return hi
-        elif mode == "hi-xi":
-            hi_projected = self.fc21(x)
-            xi = self.decode(hi_projected)
-            xi = self.xi_bn(xi)
-            return xi
-
-class CVAE_s2_e(AbstractAutoEncoder):
-    def __init__(self, d, beta, **kwargs):
-        super(CVAE_s2_e, self).__init__()
-
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(d // 2, d, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d),
-            nn.ReLU(inplace=True),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-        )
-
-        self.decoder = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-        )
-
-        self.decoder2 = nn.Sequential(
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-            ResBlock(d, d, bn=True),
-            nn.BatchNorm2d(d),
-
-            nn.ConvTranspose2d(d, d // 2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(d // 2),
-            nn.LeakyReLU(inplace=True),
-            nn.ConvTranspose2d(d // 2, 3, kernel_size=4, stride=2, padding=1, bias=False),
-        )
-
-        self.xi_bn = nn.BatchNorm2d(3)
-        self.xd_bn = nn.BatchNorm2d(3)
-        self.x_bn = nn.BatchNorm2d(3)
-        self.f = 2
-        self.d = d
-        self.fc11 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.fc12 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-        self.fc21 = nn.Linear(d * self.f ** 2, d * self.f ** 2)
-
-    def encode(self, x):
-        h = self.encoder(x)
-        h1 = h.view(-1, self.d * self.f ** 2)
-        return h, self.fc11(h1), self.fc12(h1), self.fc21(h1)
-
-    def reparameterize(self, mu, logvar):
-        if self.training:
-            std = logvar.mul(0.5).exp_()
-            eps = std.new(std.size()).normal_()
-            return eps.mul(std).add_(mu)
-        else:
-            return mu
-
-    def decode(self, z):
-        z = z.view(-1, self.d, self.f, self.f)
-        h3 = self.decoder(z)
-        return torch.tanh(h3)
-
-
-    def forward(self, x):
-        _, mu, logvar, mu2 = self.encode(x)
-
-        z = self.reparameterize(mu, logvar)
-        z = z+mu2
-
-        xn = self.decode(z)
-        xn = self.x_bn(xn)
-        return xn, x
-
-    def sample(self, size):
-        sample = torch.randn(size, self.d * self.f ** 2, requires_grad=False)
-        if self.cuda():
-            sample = sample.cuda()
-        return self.decode(sample).cpu()
+        return self.mse + self.vq_coef*self.vq_loss + self.commit_coef*self.commit_loss + self.ce_coef*self.ce_loss
