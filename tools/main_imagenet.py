@@ -34,6 +34,7 @@ parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
 parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
 parser.add_argument('--alpha', default=2.0, type=float, help='mix up')
 
+parser.add_argument('--save_dir', default='./results/imagenet', type=str, metavar='PATH',help='save dir')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -195,8 +196,8 @@ def main_worker(gpu, ngpus_per_node, args):
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
+    traindir = os.path.join(args.data, 'ILSVRC2012_img_train')
+    valdir = os.path.join(args.data, 'ILSVRC2012_img_val')
     IMAGENET_PCA = {
         'eigval': torch.Tensor([0.2175, 0.0188, 0.0045]),
         'eigvec': torch.Tensor([
@@ -254,7 +255,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                                            eta_min=learning_rate_min)
 
     if args.evaluate:
-        validate(val_loader, model, criterion, args)
+        validate(val_loader, model,  args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -265,7 +266,7 @@ def main_worker(gpu, ngpus_per_node, args):
         scheduler.step()
 
         if epoch % 10 == 1:
-            acc1 = validate(val_loader, model, criterion, args)
+            acc1 = validate(val_loader, model, args)
             if  (args.multiprocessing_distributed
                     and args.rank % ngpus_per_node == 0):
                 torch.save(model.state_dict(),
@@ -344,7 +345,7 @@ def validate(val_loader, model,  args):
 
     progress = ProgressMeter(
         len(val_loader),
-        [batch_time,  top1, top1_x_xi, top1_xi, acc_avg, sparse_avg, TC, top5],
+        [batch_time,  top1, top1_x_xi, top1_xi, acc_avg, sparse_avg, TC],
         prefix='Test: ')
 
     # switch to evaluate mode
@@ -360,14 +361,14 @@ def validate(val_loader, model,  args):
 
             # compute output
             bs = x.size(0)
-            norm = torch.norm(torch.abs(x.view(100,-1)),p=2,dim=1)
-            out, out_i, out_x_xi, hi, xi, mu, logvar = model(x)
+            norm = torch.norm(torch.abs(x.view(bs,-1)),p=2,dim=1)
+            out, out_i, out_x_xi,  xi, mu, logvar = model(x)
             acc_xi = 1-F.mse_loss(torch.div(xi,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
                               torch.div(x,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
-                              reduction = 'sum')/100
+                              reduction = 'sum')/bs
             acc_xd = 1-F.mse_loss(torch.div(x-xi,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
                               torch.div(x,norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
-                              reduction = 'sum')/100
+                              reduction = 'sum')/bs
 
             acc_avg.update(acc_xi.data.item(), bs)
             # measure accuracy and record loss
@@ -380,10 +381,8 @@ def validate(val_loader, model,  args):
             top1_x_xi.update(prec1_x_xi.item(), bs)
 
             prec1_xi,  _,_,_ = accuracy(out_i.data, y.data, topk=(1, 5))
-            top1_xi.update(prec1_xi.item(), bs)
 
-            tc = total_correlation(hi, mu, logvar)/  bs / args.dim
-            TC.update(tc.item(), bs)
+
 
             # measure elapsed time
             batch_time.update(time.time() - end)
