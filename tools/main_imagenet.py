@@ -85,7 +85,7 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
 
 def main():
     args = parser.parse_args()
-
+    setup_logger(args.save_dir)
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)

@@ -202,11 +202,14 @@ class CVAE_cifar(AbstractAutoEncoder):
         xi = self.decode(hi_projected)
         xi = self.xi_bn(xi)
 
-        with torch.no_grad():
-           out = self.classifier(x)
-        out1 = self.classifier(xi)
-        out2 = self.classifier(x-xi)
-        return out, out1, out2, hi, xi, mu, logvar
+        #with torch.no_grad():
+        #   out = self.classifier(x)
+        #out1 = self.classifier(xi)
+        #out2 = self.classifier(x-xi)
+        out = self.classifier(torch.cat((xi, x-xi), dim=0))
+        out1 = out[0:x.size(0)]
+        out2 = out[x.size(0):]
+        return out1, out1, out2, hi, xi, mu, logvar
 
 class CVAE_imagenet(nn.Module):
     def __init__(self, d, k=10, num_channels=3, **kwargs):
