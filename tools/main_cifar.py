@@ -30,7 +30,6 @@ def reconst_images(epoch=2, batch_size=64, batch_num=2, dataloader=None, model=N
     cifar10_dataloader = dataloader
 
     use_cuda = torch.cuda.is_available()  # check if GPU exists
-    device = torch.device("cuda" if use_cuda else "cpu")  # use CPU or GPU
     model.eval()
 
     with torch.no_grad():
@@ -239,7 +238,6 @@ def main(args):
         test_loss = 0
         # all_l, all_s, all_y, all_z, all_mu, all_logvar = [], [], [], [], [], []
         loss_avg = AverageMeter()
-        share_mag = AverageMeter()
         top1 = AverageMeter()
         top1_x_xi = AverageMeter()
         top1_xi = AverageMeter()
