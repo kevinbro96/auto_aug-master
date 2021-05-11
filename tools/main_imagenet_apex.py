@@ -473,12 +473,15 @@ def reconst_images(run, batch_size=64, batch_num=2, dataloader=None, model=None)
 
     model.eval()
 
-    with torch.no_grad():
-        for batch_idx, (X, y) in enumerate(cifar10_dataloader):
-            if batch_idx >= batch_num:
+    prefetcher = data_prefetcher(cifar10_dataloader)
+    X, y = prefetcher.next()
+    i = 0
+    while x is not None:
+        i += 1
+        with torch.no_grad():
+            if i >= batch_num:
                 break
             else:
-                X, y = X.cuda(), y.cuda().view(-1, )
                 _,_,_,_, xi, _, _ = model(X)
 
                 grid_X = torchvision.utils.make_grid(X[:batch_size].data, nrow=8, padding=2, normalize=True)
@@ -491,6 +494,7 @@ def reconst_images(run, batch_size=64, batch_num=2, dataloader=None, model=None)
                                                         normalize=True)
                 run.log({"_Batch_{batch}_X-Xi.jpg".format(batch=batch_idx): [
                     wandb.Image(grid_X_Xi)]}, commit=False)
+        X, y = prefetcher.next()
     print('reconstruction complete!')
 
 def validate(val_loader, model, criterion, run):
