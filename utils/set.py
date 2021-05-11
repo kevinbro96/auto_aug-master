@@ -7,7 +7,18 @@ import torch
 import numpy as np
 from torch.optim.optimizer import Optimizer
 import math
-__all__ = ['Logger', 'setup_logger','set_random_seed','accuracy','AverageMeter','AdamW','mixup_data','total_correlation']
+__all__ = ['setup_run','Logger', 'setup_logger','set_random_seed','accuracy','AverageMeter','AdamW','mixup_data','total_correlation']
+import wandb
+
+def setup_run(args):
+
+    if args.local_rank == 0:
+        run = wandb.init(
+        )
+    else:
+        run = None
+
+    return run
 
 def mkdir_if_missing(dirname):
     """Create dirname if it is missing."""
