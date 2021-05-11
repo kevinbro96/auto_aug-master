@@ -102,7 +102,7 @@ def parse():
     parser.add_argument('--channels-last', type=bool, default=False)
 
     parser.add_argument('--alpha', default=2.0, type=float, help='mix up')
-    parser.add_argument('--re', default=10.0, type=float, help='kl weight')
+    parser.add_argument('--re', nargs='+', type=int)
     parser.add_argument('--kl', default=1.0, type=float, help='kl weight')
     parser.add_argument('--ce', default=1.0, type=float, help='cross entropy weight')
     args = parser.parse_args()
@@ -355,6 +355,13 @@ def train(train_loader, model, criterion, optimizer, epoch, run):
     model.train()
     end = time.time()
 
+    if epoch < 30:
+        re = args.re[0]
+    elif epoch < 60:
+        re = args.re[1]
+    else:
+        re = args.re[2]
+
     prefetcher = data_prefetcher(train_loader)
     x, y = prefetcher.next()
     i = 0
@@ -377,7 +384,7 @@ def train(train_loader, model, criterion, optimizer, epoch, run):
         cross_entropy = lam * F.cross_entropy(out2, y) + (1. - lam) * F.cross_entropy(out2, y_b)
         l2 = cross_entropy + entropy
         l3 = torch.mean(torch.norm((emb - z_e.detach())**2, 2, 1)) + 0.5*torch.mean(torch.norm((emb.detach() - z_e)**2, 2, 1))
-        loss = args.re * l1 + args.ce * l2 + args.kl * l3
+        loss = re * l1 + args.ce * l2 + args.kl * l3
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -447,7 +454,8 @@ def train(train_loader, model, criterion, optimizer, epoch, run):
                        loss_entropy=loss_entropy, loss_kl=loss_kl))
                 run.log({"Loss":losses.avg, "Prec@1":top1.avg,
                          "Loss_rec":loss_rec.avg, "loss_ce":loss_ce.avg,
-                         "loss_entropy":loss_entropy.avg, "loss_kl":loss_kl.avg})
+                         "loss_entropy":loss_entropy.avg, "loss_kl":loss_kl.avg,
+                         're_weight': re, "learning rate":optimizer.param_groups[0]['lr']})
         if args.prof >= 0: torch.cuda.nvtx.range_push("prefetcher.next()")
         x, y = prefetcher.next()
         if args.prof >= 0: torch.cuda.nvtx.range_pop()
@@ -542,7 +550,7 @@ def validate(val_loader, model, criterion, run):
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})\t'
                   'Acc_xi {acc_avg.avg:.3f}\t'
-                  'Acc_xd {sparse_avg.avg.3f}'.format(
+                  'Acc_xd {sparse_avg.avg:.3f}'.format(
                    i, len(val_loader),
                    args.world_size * args.batch_size / batch_time.val,
                    args.world_size * args.batch_size / batch_time.avg,
