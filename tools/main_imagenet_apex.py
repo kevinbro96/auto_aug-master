@@ -2,7 +2,7 @@ import argparse
 import os
 import shutil
 import time
-
+import torchvision
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -256,8 +256,7 @@ def main():
         num_workers=args.workers, pin_memory=True,
         sampler=val_sampler,
         collate_fn=collate_fn)
-
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30 * np.ceil(n_train / (args.batch_size*args.world_size)),
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15,
                                                            eta_min=learning_rate_min)
 
     if args.evaluate:
@@ -364,6 +363,7 @@ def train(train_loader, model, criterion, optimizer, epoch, run):
 
     prefetcher = data_prefetcher(train_loader)
     x, y = prefetcher.next()
+
     i = 0
     while x is not None:
         i += 1
@@ -476,23 +476,23 @@ def reconst_images(run, batch_size=64, batch_num=2, dataloader=None, model=None)
     prefetcher = data_prefetcher(cifar10_dataloader)
     X, y = prefetcher.next()
     i = 0
-    while x is not None:
+    while X is not None:
         i += 1
         with torch.no_grad():
             if i >= batch_num:
                 break
             else:
-                _,_,_,_, xi, _, _ = model(X)
+                _,_,_, xi, _, _ = model(X)
 
                 grid_X = torchvision.utils.make_grid(X[:batch_size].data, nrow=8, padding=2, normalize=True)
-                run.log({"_Batch_{batch}_X.jpg".format(batch=batch_idx): [
+                run.log({"_Batch_{batch}_X.jpg".format(batch=i): [
                     wandb.Image(grid_X)]}, commit=False)
                 grid_Xi = torchvision.utils.make_grid(xi[:batch_size].data, nrow=8, padding=2, normalize=True)
-                run.log({"_Batch_{batch}_Xi.jpg".format(batch=batch_idx): [
+                run.log({"_Batch_{batch}_Xi.jpg".format(batch=i): [
                     wandb.Image(grid_Xi)]}, commit=False)
                 grid_X_Xi = torchvision.utils.make_grid((X[:batch_size] - xi[:batch_size]).data, nrow=8, padding=2,
                                                         normalize=True)
-                run.log({"_Batch_{batch}_X-Xi.jpg".format(batch=batch_idx): [
+                run.log({"_Batch_{batch}_X-Xi.jpg".format(batch=i): [
                     wandb.Image(grid_X_Xi)]}, commit=False)
         X, y = prefetcher.next()
     print('reconstruction complete!')

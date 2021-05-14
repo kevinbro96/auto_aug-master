@@ -271,12 +271,11 @@ class CVAE_imagenet(nn.Module):
         l = self.decode(z_q)
         xi = self.L_bn(l)
 
-        with torch.no_grad():
-            out = self.classifier(x)
-        out1 = self.classifier(xi)
-        out2 = self.classifier(x-xi)
+        out = self.classifier(torch.cat((xi, x-xi), dim=0))
+        out1 = out[0:x.size(0)]
+        out2 = out[x.size(0):]
 
-        return  out, out1, out2, xi, z_e, emb
+        return  out1, out1, out2, xi, z_e, emb
 
 
     def loss_function(self, x, recon_x, y, out, out1, z_e, emb, argmin, lam):
