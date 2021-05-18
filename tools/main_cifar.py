@@ -233,13 +233,14 @@ def main(args):
     criterion = nn.CrossEntropyLoss()
 
     if args.testOnly:
-        model.load_state_dict(torch.load("results/emb32_5.0_0.5/model_new.pth"))
+        model.load_state_dict(torch.load(args.resume))
         model.eval()
         test_loss = 0
         # all_l, all_s, all_y, all_z, all_mu, all_logvar = [], [], [], [], [], []
         loss_avg = AverageMeter()
         top1 = AverageMeter()
         top1_x_xi = AverageMeter()
+        top5_x_xi = AverageMeter()
         top1_xi = AverageMeter()
         TC = AverageMeter()
 
@@ -249,6 +250,7 @@ def main(args):
                 x, y = x.cuda(), y.cuda().view(-1, )
                 bs = x.size(0)
                 out, out_i, out_x_xi, hi, xi, mu, logvar = model(x)
+                norm = torch.norm(torch.abs(x.view(100, -1)), p=2, dim=1)
                 loss = 1 - F.mse_loss(torch.div(xi, norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
                                       torch.div(x, norm.unsqueeze(1).unsqueeze(2).unsqueeze(3)), \
                                       reduction='sum') / 100
@@ -258,8 +260,9 @@ def main(args):
                 prec1, _, _, _ = accuracy(out.data, y.data, topk=(1, 5))
                 top1.update(prec1.item(), bs)
 
-                prec1_x_xi, _, _, _ = accuracy(out_x_xi.data, y.data, topk=(1, 5))
+                prec1_x_xi, prec5_x_xi, _, _ = accuracy(out_x_xi.data, y.data, topk=(1, 5))
                 top1_x_xi.update(prec1_x_xi.item(), bs)
+                top5_x_xi.update(prec5_x_xi.item(), bs)
 
                 prec1_xi, _, _, _ = accuracy(out_i.data, y.data, topk=(1, 5))
                 top1_xi.update(prec1_xi.item(), bs)
@@ -267,7 +270,7 @@ def main(args):
                 tc = total_correlation(hi, mu, logvar) / bs / CNN_embed_dim
                 TC.update(tc.item(), bs)
             print("\n| Validation \t\tLoss: %.4f TC: %.4f" % (loss_avg.avg, TC.avg))
-            print("| X: %.2f%% X-Xi: %.2f%% Xi: %.2f%%" % (top1.avg, top1_x_xi.avg, top1_xi.avg))
+            print("| X: %.2f%% X-Xi: %.2f%% Xi: %.2f%% X-Xi: %.2f%%" % (top1.avg, top1_x_xi.avg, top1_xi.avg, top5_x_xi.avg))
         sys.exit(0)
 
     print('\n[Phase 3] : Training model')
@@ -299,7 +302,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=666, type=int, help='seed')
     parser.add_argument('--dataset', default='cifar10', type=str, help='dataset = [cifar10/cifar100]')
     parser.add_argument('--optim', default='consine', type=str, help='optimizer')
-    parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
+    parser.add_argument('--resume', '-r', type=str, help='resume from checkpoint')
     parser.add_argument('--testOnly', '-t', action='store_true', help='Test mode with the saved model')
     parser.add_argument('--alpha', default=2.0, type=float, help='mix up')
     parser.add_argument('--epochs', default=300, type=int, help='training_epochs')

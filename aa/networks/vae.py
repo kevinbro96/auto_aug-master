@@ -212,7 +212,7 @@ class CVAE_cifar(AbstractAutoEncoder):
         return out1, out1, out2, hi, xi, mu, logvar
 
 class CVAE_imagenet(nn.Module):
-    def __init__(self, d, k=10, num_channels=3, **kwargs):
+    def __init__(self, d, k=10, num_classes=9, num_channels=3, **kwargs):
         super(CVAE_imagenet, self).__init__()
 
         self.encoder = nn.Sequential(
@@ -250,7 +250,7 @@ class CVAE_imagenet(nn.Module):
         self.emb.weight.detach().normal_(0, 0.02)
         torch.fmod(self.emb.weight, 0.04)
 
-        self.classifier = resnet50(pretrained=True)
+        self.classifier = resnet50(pretrained=True, num_classes=num_classes)
 
         self.L_bn = nn.BatchNorm2d(num_channels)
 

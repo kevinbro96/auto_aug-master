@@ -87,6 +87,7 @@ def parse():
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
     parser.add_argument('--save_dir', default='./results/imagenet/', type=str, help='save_dir')
+    parser.add_argument('--datasets', default='simagenet', type=str, help='dataset')
 
     parser.add_argument('--prof', default=-1, type=int,
                         help='Only run 10 iterations for profiling.')
@@ -149,9 +150,17 @@ def main():
         memory_format = torch.channels_last
     else:
         memory_format = torch.contiguous_format
+    # Data loading code
+    if args.datasets =='rimagenet':
+        label_map = get_label_mapping('restricted_imagenet',
+                                     constants.RESTRICTED_IMAGNET_RANGES)
+        num_classes = 9
+    elif args.datasets =='simagenet':
+        label_map = get_subclass_label_mapping(ranges)
+        num_classes = 203
 
     # create model
-    model = CVAE_imagenet(d=64, k=128)
+    model = CVAE_imagenet(d=64, k=128, num_classes=num_classes)
 
     if args.sync_bn:
         import apex
@@ -208,9 +217,6 @@ def main():
                 print("=> no checkpoint found at '{}'".format(args.resume))
         resume()
 
-    # Data loading code
-    label_map = get_label_mapping('restricted_imagenet',
-                                     constants.RESTRICTED_IMAGNET_RANGES)
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
 
@@ -226,7 +232,7 @@ def main():
             transform=transforms.Compose([
             transforms.RandomResizedCrop(crop_size),
             transforms.RandomHorizontalFlip(),
-            # transforms.ToTensor(), Too slow
+            #transforms.ToTensor(),
             # normalize,
         ]),
             label_mapping=label_map)
@@ -235,7 +241,8 @@ def main():
             transform=transforms.Compose([
             transforms.Resize(val_size),
             transforms.CenterCrop(crop_size),
-        ]),
+            #transforms.ToTensor(),
+            ]),
          label_mapping=label_map)
 
     train_sampler = None
@@ -283,7 +290,7 @@ def main():
                 'state_dict': model.state_dict(),
                 'best_prec1': best_prec1,
                 'optimizer' : optimizer.state_dict(),
-            }, is_best)
+            }, is_best, epoch)
             if epoch % 10 == 1:
                 reconst_images(run, dataloader=val_loader, model=model)
 
@@ -291,8 +298,8 @@ class data_prefetcher():
     def __init__(self, loader):
         self.loader = iter(loader)
         self.stream = torch.cuda.Stream()
-        self.mean = torch.tensor([0.485 * 255, 0.456 * 255, 0.406 * 255]).cuda().view(1,3,1,1)
-        self.std = torch.tensor([0.229 * 255, 0.224 * 255, 0.225 * 255]).cuda().view(1,3,1,1)
+        self.mean = torch.tensor([0.485*255, 0.456*255, 0.406*255]).cuda().view(1,3,1,1)
+        self.std = torch.tensor([0.229*255, 0.224*255, 0.225*255]).cuda().view(1,3,1,1)
         # With Amp, it isn't necessary to manually convert data to half.
         # if args.fp16:
         #     self.mean = self.mean.half()
@@ -363,7 +370,6 @@ def train(train_loader, model, criterion, optimizer, epoch, run):
 
     prefetcher = data_prefetcher(train_loader)
     x, y = prefetcher.next()
-
     i = 0
     while x is not None:
         i += 1
@@ -573,7 +579,8 @@ def validate(val_loader, model, criterion, run):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, epoch):
+    filename = os.path.join(args.save_dir, 'model_epoch{}.pth'.format(epoch + 1))
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')

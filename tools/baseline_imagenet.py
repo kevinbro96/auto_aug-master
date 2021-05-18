@@ -87,6 +87,7 @@ def parse():
     parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                         help='use pre-trained model')
     parser.add_argument('--save_dir', default='./results/imagenet/', type=str, help='save_dir')
+    parser.add_argument('--datasets', default='simagenet', type=str, help='dataset')
 
     parser.add_argument('--prof', default=-1, type=int,
                         help='Only run 10 iterations for profiling.')
@@ -145,8 +146,16 @@ def main():
     else:
         memory_format = torch.contiguous_format
 
+    if args.datasets =='rimagenet':
+        label_map = get_label_mapping('restricted_imagenet',
+                                     constants.RESTRICTED_IMAGNET_RANGES)
+        num_classes = 9
+    elif args.datasets =='simagenet':
+        label_map = get_subclass_label_mapping(ranges)
+        num_classes = 203
+
     # create model
-    model = resnet50(pretrained=True)
+    model = resnet50(pretrained=True, num_classes=num_classes)
 
     if args.sync_bn:
         import apex
@@ -204,8 +213,7 @@ def main():
         resume()
 
     # Data loading code
-    label_map = get_label_mapping('restricted_imagenet',
-                                     constants.RESTRICTED_IMAGNET_RANGES)
+
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
 
@@ -276,7 +284,7 @@ def main():
                 'state_dict': model.state_dict(),
                 'best_prec1': best_prec1,
                 'optimizer' : optimizer.state_dict(),
-            }, is_best)
+            }, is_best, epoch)
 
 class data_prefetcher():
     def __init__(self, loader):
@@ -491,7 +499,8 @@ def validate(val_loader, model, criterion, run):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, epoch):
+    filename = os.path.join(args.save_dir, 'model_epoch{}.pth'.format(epoch + 1))
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')

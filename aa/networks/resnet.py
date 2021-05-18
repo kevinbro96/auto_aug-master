@@ -248,8 +248,8 @@ class ResNet(nn.Module):
     forward = _forward
 
 
-def _resnet(arch, block, layers, pretrained, progress, **kwargs):
-    model = ResNet(block, layers, **kwargs)
+def _resnet(arch, block, layers, pretrained, num_classes,progress, **kwargs):
+    model = ResNet(block, layers,num_classes, **kwargs)
     if pretrained:
         pretrain_dict = torch.load(model_urls[arch])
         model_dict = model.state_dict()
@@ -286,7 +286,7 @@ def resnet34(pretrained=False, progress=True, **kwargs):
 
 
 
-def resnet50(pretrained=False, progress=True, **kwargs):
+def resnet50(pretrained=False, num_classes=9,progress=True, **kwargs):
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -294,7 +294,7 @@ def resnet50(pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
+    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, num_classes, progress,
                    **kwargs)
 
 
