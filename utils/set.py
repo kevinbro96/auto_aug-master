@@ -42,7 +42,7 @@ def setup_run(args):
 
     if args.local_rank == 0:
         run = wandb.init(
-            config=args, name=args.save_dir.replace("results/", '')
+            config=args, name=args.save_dir.replace("results/", ''), save_code=True,
         )
     else:
         run = None
