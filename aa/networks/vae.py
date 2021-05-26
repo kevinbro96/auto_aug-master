@@ -14,6 +14,11 @@ from torch.autograd import Variable
 from .resnet import resnet50
 from .nearest_embed import NearestEmbed
 import pdb
+import sys
+sys.path.append('.')
+sys.path.append('..')
+from utils.normalize import *
+
 def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=True)
 
@@ -49,7 +54,7 @@ class wide_basic(nn.Module):
         return out
 
 class Wide_ResNet(nn.Module):
-    def __init__(self, depth, widen_factor, dropout_rate, num_classes):
+    def __init__(self, depth, widen_factor, dropout_rate, num_classes, norm=False):
         super(Wide_ResNet, self).__init__()
         self.in_planes = 16
 
@@ -66,6 +71,8 @@ class Wide_ResNet(nn.Module):
         self.layer3 = self._wide_layer(wide_basic, nStages[3], n, dropout_rate, stride=2)
         self.bn1 = nn.BatchNorm2d(nStages[3], momentum=0.9)
         self.linear = nn.Linear(nStages[3], num_classes)
+        self.normalize = CIFARNORMALIZE(32)
+        self.norm = norm
 
     def _wide_layer(self, block, planes, num_blocks, dropout_rate, stride):
         strides = [stride] + [1]*(int(num_blocks)-1)
@@ -78,6 +85,8 @@ class Wide_ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        if self.norm:
+            x = self.normalize(x)
         out = self.conv1(x)
         out = self.layer1(out)
         out = self.layer2(out)
@@ -140,7 +149,7 @@ class AbstractAutoEncoder(nn.Module):
         return
 
 class CVAE_cifar(AbstractAutoEncoder):
-    def __init__(self, d, z,  **kwargs):
+    def __init__(self, d, z, with_classifier=True, **kwargs):
         super(CVAE_cifar, self).__init__()
 
         self.encoder = nn.Sequential(
@@ -175,7 +184,10 @@ class CVAE_cifar(AbstractAutoEncoder):
         self.fc11 = nn.Linear(d * self.f ** 2, self.z)
         self.fc12 = nn.Linear(d * self.f ** 2, self.z)
         self.fc21 = nn.Linear(self.z, d * self.f ** 2)
-        self.classifier = Wide_ResNet(28, 10, 0.3, 10)
+
+        self.with_classifier = with_classifier
+        if self.with_classifier:
+            self.classifier = Wide_ResNet(28, 10, 0.3, 10)
 
     def encode(self, x):
         h = self.encoder(x)
@@ -183,12 +195,12 @@ class CVAE_cifar(AbstractAutoEncoder):
         return h, self.fc11(h1), self.fc12(h1)
 
     def reparameterize(self, mu, logvar):
-        if self.training:
+        # if self.training:
             std = logvar.mul(0.5).exp_()
             eps = std.new(std.size()).normal_()
             return eps.mul(std).add_(mu)
-        else:
-            return mu
+        # else:
+        #     return mu
 
     def decode(self, z):
         z = z.view(-1, self.d, self.f, self.f)
@@ -197,7 +209,7 @@ class CVAE_cifar(AbstractAutoEncoder):
 
     def forward(self, x):
         _, mu, logvar = self.encode(x)
-        hi = self.reparameterize(mu, logvar)
+        hi = self.reparameterize(mu, logvar) #+ noise* torch.randn(mu.size()).cuda()
         hi_projected = self.fc21(hi)
         xi = self.decode(hi_projected)
         xi = self.xi_bn(xi)
@@ -209,11 +221,14 @@ class CVAE_cifar(AbstractAutoEncoder):
         # out = self.classifier(torch.cat((xi, x-xi), dim=0))
         # out1 = out[0:x.size(0)]
         # out2 = out[x.size(0):]
-        out2 = self.classifier(x-xi)
-        return out2, out2, out2, hi, xi, mu, logvar
+        if self.with_classifier:
+            out2 = self.classifier(x-xi)
+            return out2, out2, out2, hi, xi, mu, logvar
+        else:
+            return xi
 
 class CVAE_imagenet(nn.Module):
-    def __init__(self, d, k=10, num_classes=9, num_channels=3, **kwargs):
+    def __init__(self, d, k=10, num_classes=9, num_channels=3, with_classifier=True,**kwargs):
         super(CVAE_imagenet, self).__init__()
 
         self.encoder = nn.Sequential(
@@ -250,8 +265,9 @@ class CVAE_imagenet(nn.Module):
 
         self.emb.weight.detach().normal_(0, 0.02)
         torch.fmod(self.emb.weight, 0.04)
-
-        self.classifier = resnet50(pretrained=True, num_classes=num_classes)
+        self.with_classifier = with_classifier
+        if self.with_classifier:
+            self.classifier = resnet50(pretrained=True, num_classes=num_classes)
 
         self.L_bn = nn.BatchNorm2d(num_channels)
 
@@ -274,9 +290,11 @@ class CVAE_imagenet(nn.Module):
         # out = self.classifier(torch.cat((xi, x-xi), dim=0))
         # out1 = out[0:x.size(0)]
         # out2 = out[x.size(0):]
-        out2 = self.classifier(x-xi)
-
-        return  out2, out2, out2, xi, z_e, emb
+        if self.with_classifier:
+            out2 = self.classifier(x-xi)
+            return  out2, out2, out2, xi, z_e, emb
+        else:
+            return xi
 
 
     def loss_function(self, x, recon_x, y, out, out1, z_e, emb, argmin, lam):

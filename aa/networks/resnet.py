@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
-
+import sys
+sys.path.append('.')
+sys.path.append('..')
+from utils.normalize import *
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -152,7 +155,7 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes=9, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
-                 norm_layer=None):
+                 norm_layer=None, norm=False):
         super(ResNet, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -183,7 +186,8 @@ class ResNet(nn.Module):
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
+        self.normalize = IMAGENETNORMALIZE(224)
+        self.norm = norm
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -227,6 +231,8 @@ class ResNet(nn.Module):
         # return nn.Sequential(*layers)
 
     def _forward(self, x, with_latent=False, fake_relu=False, no_relu=False):
+        if self.norm:
+            x = self.normalize(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -248,8 +254,8 @@ class ResNet(nn.Module):
     forward = _forward
 
 
-def _resnet(arch, block, layers, pretrained, num_classes,progress, **kwargs):
-    model = ResNet(block, layers,num_classes, **kwargs)
+def _resnet(arch, block, layers, pretrained, num_classes, progress, norm, **kwargs):
+    model = ResNet(block, layers, num_classes=num_classes, norm=norm, **kwargs)
     if pretrained:
         pretrain_dict = torch.load(model_urls[arch])
         model_dict = model.state_dict()
@@ -286,7 +292,7 @@ def resnet34(pretrained=False, progress=True, **kwargs):
 
 
 
-def resnet50(pretrained=False, num_classes=9,progress=True, **kwargs):
+def resnet50(pretrained=False, num_classes=9, progress=True, norm=False, **kwargs):
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
 
@@ -294,7 +300,7 @@ def resnet50(pretrained=False, num_classes=9,progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, num_classes, progress,
+    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, num_classes, progress, norm,
                    **kwargs)
 
 

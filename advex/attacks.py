@@ -94,7 +94,7 @@ class NoAttack(nn.Module):
         return inputs
 
 class PGDAttack(nn.Module):
-    def __init__(self, model, optimizer=None, eps_max=8/255, step_size=None,  num_iterations=7, norm='linf', rand_init=True, scale_each=False):
+    def __init__(self, model, optimizer=None, eps_max=8/255, step_size=None,  num_iterations=7, norm='linf', rand_init=True, scale_each=False, dataset='cifar'):
         super().__init__()
         self.nb_its = num_iterations
         self.eps_max = eps_max
@@ -109,11 +109,7 @@ class PGDAttack(nn.Module):
         self.criterion = nn.CrossEntropyLoss().cuda()
         self.model = model
         self.optimizer = optimizer
-
-        self.normalize = IMAGENETNORMALIZE(224)
-        self.innormalize = IMAGENETINNORMALIZE(224)
-
-
+        self.dataset = dataset
 
     def _init(self, shape, eps):
         if self.rand_init:
@@ -135,7 +131,6 @@ class PGDAttack(nn.Module):
             return torch.zeros(shape, requires_grad=True, device='cuda')
 
     def forward(self, img, labels):
-        img = self.innormalize(img)
         base_eps = self.eps_max * torch.ones(img.size()[0], device='cuda')
         step_size = self.step_size * torch.ones(img.size()[0], device='cuda')
 
@@ -143,7 +138,7 @@ class PGDAttack(nn.Module):
         img.requires_grad = True
         delta = self._init(img.size(), base_eps)
 
-        s = self.model(self.normalize(img + delta))
+        s = self.model(img + delta)
         if self.norm == 'l2':
             l2_max = base_eps
         for it in range(self.nb_its):
@@ -179,12 +174,12 @@ class PGDAttack(nn.Module):
                 raise NotImplementedError
 
             if it != self.nb_its - 1:
-                s = self.model(self.normalize(img + delta))
+                s = self.model(img + delta)
                 delta.grad.data.zero_()
 
         delta.data[torch.isnan(delta.data)] = 0
         adv_sample = img + delta
-        return self.normalize(torch.clamp(adv_sample.detach(), 0, 1))
+        return torch.clamp(adv_sample.detach(), 0, 1)
 
 class DeltaAttack(nn.Module):
     def __init__(self, model,  vae, eps_max=8/255, step_size=None,  num_iterations=7, norm='linf', rand_init=True, scale_each=False, loss='ce'):
@@ -206,6 +201,8 @@ class DeltaAttack(nn.Module):
             self.criterion = nn.CrossEntropyLoss().cuda()
         self.model = model
         self.vae = vae
+        self.normalize = CIFARNORMALIZE(32)
+        self.innormalize = CIFARINNORMALIZE(32)
 
     def _init(self, shape, eps):
         if self.rand_init:
@@ -235,8 +232,8 @@ class DeltaAttack(nn.Module):
         img.requires_grad = True
         delta = self._init(img.size(), base_eps)
 
-        _, _, delta_rec = self.vae(img+delta)
-        s = self.model(normalize(img + delta) - normalize(delta_rec))
+        gx = self.vae(self.normalize(img+delta))
+        s = self.model(self.innormalize(gx))
         if self.norm == 'l2':
             l2_max = base_eps
         for it in range(self.nb_its):
@@ -271,10 +268,11 @@ class DeltaAttack(nn.Module):
                 raise NotImplementedError
 
             if it != self.nb_its - 1:
-                _, _, delta_rec = self.vae(img + delta)
-                s = self.model(normalize(img + delta) - normalize(delta_rec))
+                gx = self.vae(self.normalize(img + delta))
+                s = self.model(self.innormalize(gx))
                 delta.grad.data.zero_()
 
         delta.data[torch.isnan(delta.data)] = 0
         adv_sample = img + delta
         return torch.clamp(adv_sample.detach(), 0, 1 ) # , delta_in.mean().item(), delta_dn.mean().item()
+
